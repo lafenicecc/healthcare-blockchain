@@ -1,6 +1,6 @@
 # healthcare-blockchain
 
-A demo healthcare blockchain base on Hyperledger fabric v0.6
+A demo healthcare blockchain based on Hyperledger fabric v0.6.
 
 ## Useful links
 
