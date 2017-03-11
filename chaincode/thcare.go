@@ -34,6 +34,10 @@ type EMR struct{
 	AuthorityList map[string]int 	//授权阅读的人员列表
 }
 
+type EMRList struct{
+        EMRmap  map[int]EMR
+}
+
 // User struct
 type User struct {
 	Name	string
@@ -48,7 +52,7 @@ func (t *THcareChaincode) getUserEMRNum(stub shim.ChaincodeStubInterface, name s
 
 	user, err := t.getUserByName (stub, name)
 	if err != nil {
-		return -1, errors.New("Entity not found")
+		return -1, errors.New("User not found")
 	}
 	i := user.EMRNum
 	return i,nil
@@ -58,7 +62,7 @@ func (t *THcareChaincode) getUserEMRNum(stub shim.ChaincodeStubInterface, name s
 //
 //	user, err := t.getUserByName (stub, name)
 //	if err != nil {
-//		return make(map[string]int), errors.New("Entity not found")
+//		return make(map[string]int), errors.New(" not found")
 //	}
 //
 //	return user.ownEMR, nil
@@ -88,7 +92,7 @@ func (t *THcareChaincode) getUserByName(stub shim.ChaincodeStubInterface, name s
 		return User{}, fmt.Errorf("Failed to get state %s", key)
 	}
 	if Valbytes == nil {
-		return User{}, errors.New("Entity not found")
+		return User{}, errors.New("User2 not found")
 	}
 	var user User
 	err = json.Unmarshal(Valbytes, &user)
@@ -136,7 +140,7 @@ func (t *THcareChaincode) getEMRByID(stub shim.ChaincodeStubInterface, serID int
 		return EMR{}, fmt.Errorf("Failed to get state %s", key)
 	}
 	if Valbytes == nil {
-		return EMR{}, errors.New("Entity not found")
+		return EMR{}, errors.New("EMR not found")
 	}
 	var emr EMR
 	err = json.Unmarshal(Valbytes, &emr)
@@ -155,7 +159,7 @@ func (t *THcareChaincode) searchEMRByID(stub shim.ChaincodeStubInterface, serID 
 		return EMR{}, fmt.Errorf("Failed to get state %s", key)
 	}
 	if Valbytes == nil {
-		return EMR{}, errors.New("Entity not found")
+		return EMR{}, errors.New("EMR2 not found")
 	}
 	var emr EMR
 	err = json.Unmarshal(Valbytes, &emr)
@@ -174,26 +178,34 @@ func (t *THcareChaincode) searchEMRByID(stub shim.ChaincodeStubInterface, serID 
 }
 
 // 外部搜索函数，获取某人的所有EMR
-func (t *THcareChaincode) searchAllEMR(stub shim.ChaincodeStubInterface, ownName string, queryName string) (map[int]EMR, error) {
+func (t *THcareChaincode) searchAllEMR(stub shim.ChaincodeStubInterface, ownName string, queryName string) (EMRList, error) {
 	emrList := make(map[int]EMR)
 
 	var user User
 	user, err := t.getUserByName(stub, ownName)
         if err != nil {
-                return make(map[int]EMR), err
+                return EMRList{}, err
         }
 	if user.EMRNum<0 {
-		return make(map[int]EMR), errors.New("This patient have no EMR")
+		return EMRList{}, errors.New("This patient have no EMR")
 	}
 	
 	//遍历EMR
 	id := 1
 
+        currentID, err := t.getCurrentRecordID(stub, EMRIdKey)
+        if err != nil {
+                return EMRList{}, err
+        }
+
 	for {
-		temEMR, err := t.getEMRByID(stub, id)
-		if err != nil{
+		if id > int(currentID) {
 			break;
 		}
+		temEMR, err := t.getEMRByID(stub, id)
+                if err != nil {
+                        return EMRList{}, err
+                }
 
 		if temEMR.Owner == ownName {
 			_, ok := temEMR.AuthorityList[queryName]
@@ -202,13 +214,15 @@ func (t *THcareChaincode) searchAllEMR(stub shim.ChaincodeStubInterface, ownName
 			emrList[id] = temEMR
 			}
 		}
+                id++
 	}
 
 	switch len(emrList){
 	case 0:
-		return make(map[int]EMR), errors.New("No authorized EMR for this patient")
+		return EMRList{}, errors.New("No authorized EMR for this patient")
 	default:
-		return emrList, nil
+                emrmap := EMRList{EMRmap: emrList}
+		return emrmap, nil
 	}
 
 }
@@ -280,25 +294,28 @@ func (t *THcareChaincode) addReadAuthority(stub shim.ChaincodeStubInterface, emr
 
 // 为某个病人的所有记录添加权限
 func (t *THcareChaincode) addAllReadAuthority(stub shim.ChaincodeStubInterface, toAuthorName string, queryName string) error {
-	var user User
-	user, err := t.getUserByName(stub, queryName)
-	if err != nil {
-		return err
-	}
-
 
 	//遍历EMR
 	id := 1
 
+        currentID, err := t.getCurrentRecordID(stub, EMRIdKey)
+        if err != nil {
+                return err
+        }
+
 	for {
-		temEMR, err := t.getEMRByID(stub, id)
-		if err != nil{
+		if id > int(currentID) {
 			break;
 		}
+		temEMR, err := t.getEMRByID(stub, id)
+                if err != nil {
+                        return err
+                }
 
 		if temEMR.Owner == queryName {
-			temEMR.AuthorityList[queryName] = 1 
+			temEMR.AuthorityList[toAuthorName] = 1 
 		}
+                id++
 	}
 
 	// var emr EMR
@@ -347,26 +364,31 @@ func (t *THcareChaincode) delReadAuthority(stub shim.ChaincodeStubInterface, emr
 
 // 删除对某个病人所有记录的权限
 func (t *THcareChaincode) delAllReadAuthority(stub shim.ChaincodeStubInterface, toAuthorName string, queryName string) error {
-	var user User
-	user, err := t.getUserByName(stub, queryName)
-
-	var emr EMR
-
 	//遍历EMR
 	id := 1
 
+        currentID, err := t.getCurrentRecordID(stub, EMRIdKey)
+        if err != nil {
+                return err
+        }
+
 	for {
-		temEMR, err := t.getEMRByID(stub, id)
-		if err != nil{
+		if id > int(currentID) {
 			break;
 		}
+		temEMR, err := t.getEMRByID(stub, id)
+                if err != nil {
+                        return err
+                }
+
 
 		if temEMR.Owner == queryName {
-			_, ok := emr.AuthorityList[toAuthorName]
+			_, ok := temEMR.AuthorityList[toAuthorName]
 			if ok{
-				delete(emr.AuthorityList, toAuthorName)
+				delete(temEMR.AuthorityList, toAuthorName)
 			}
 		}
+                id++
 	}
 
 	
@@ -421,6 +443,26 @@ func (t *THcareChaincode) getNextRecordID(stub shim.ChaincodeStubInterface, key 
 	return ID, nil
 }
 
+
+func (t *THcareChaincode) getCurrentRecordID(stub shim.ChaincodeStubInterface, key string) (uint64, error) {
+	var ID uint64
+	currentIDBytes, err := stub.GetState(key)
+	if err != nil {
+		return initID, fmt.Errorf("Cannot get next ID because " + err.Error())
+	}
+
+	if currentIDBytes == nil {
+		return initID, fmt.Errorf("Cannot get current ID because " + err.Error())
+	} else {
+		id, err := strconv.ParseUint(string(currentIDBytes), 10, 64)
+		if err != nil {
+			return initID, fmt.Errorf("Cannot parse the current ID because " + err.Error())
+		}
+		ID = id
+	}
+
+	return ID, nil
+}
 
 // Invoke
 func (t *THcareChaincode) Invoke(stub shim.ChaincodeStubInterface, function string, args []string) ([]byte, error) {
@@ -531,19 +573,6 @@ func (t *THcareChaincode) Query(stub shim.ChaincodeStubInterface, function strin
         response, err := json.Marshal(ownEMRNum)
 		return response, err
 
-	case "getUserEMRList":
-		if len(args) != 1 {
-			return nil,
-			errors.New("Incorrect number of arguments. Expecting user's name to query")
-		}
-		userName := args[0]
-		ownEMR, err := t.getUserEMRList(stub, userName)
-		if err != nil {
-			return nil, err
-		}
-        response, err := json.Marshal(ownEMR)
-		return response, err
-
 	case "getAllEMR":
 		if len(args) != 2 {
 			return nil,
@@ -555,7 +584,11 @@ func (t *THcareChaincode) Query(stub shim.ChaincodeStubInterface, function strin
 		if err != nil {
 			return nil, err
 		}
-                response, err := json.Marshal(emrList)
+                emrlist_test := []EMR{}
+                for _,emr := range emrList.EMRmap {
+                        emrlist_test = append(emrlist_test, emr)
+                }
+                response, err := json.Marshal(emrlist_test)
 		return response, err
 		
 	case "getSingleEMR":
