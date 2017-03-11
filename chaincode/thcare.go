@@ -42,6 +42,32 @@ type User struct {
 	ownEMR  []int	// emr list for this person
 }
 
+// for test
+
+func (t *THcareChaincode) getUserEMRNum(stub shin.ChaincodeStubInterface, name string) (int, error) {
+
+	user, err := t.getUserByName (stub, name)
+	if err != nil {
+		return -1, errors.New("Entity not found")
+	}
+	i := user.EMRNum
+	return i,nil
+}
+
+func (t *THcareChaincode) getUserEMRList(stub shin.ChaincodeStubInterface, name string) ([]int, error) {
+
+	user, err := t.getUserByName (stub, name)
+	if err != nil {
+		return []int{}, errors.New("Entity not found")
+	}
+
+	ownEMRList := user.ownEMR
+
+	return ownEMRList, nil
+
+}
+
+
 func (t *THcareChaincode) setUserByName(stub shim.ChaincodeStubInterface, user User) error {
 	key := UserPrefix + user.Name
 	userBytes, err := json.Marshal(user)
@@ -222,18 +248,24 @@ func (t *THcareChaincode) addReadAuthority(stub shim.ChaincodeStubInterface, emr
 	var emr EMR
 	emr, err := t.getEMRByID(stub, emrID);
 
+	if err!=nil {
+		return errors.New("No authorized EMR for this patient")
+	}
+
 	if emr.Owner == queryName {
 		_, ok := emr.AuthorityList[toAuthorName]
 		if ok {
 		}else{
 			emr.AuthorityList[toAuthorName] = 1
+			err = t.setEMRByID(stub, emr)
+			if err != nil {
+			return err
+	}
+	
 		}
+		return nil
 	}
 
-	err = t.setEMRByID(stub, emr)
-	if err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -460,6 +492,32 @@ func (t *THcareChaincode) Invoke(stub shim.ChaincodeStubInterface, function stri
 // Query
 func (t *THcareChaincode) Query(stub shim.ChaincodeStubInterface, function string, args []string) ([]byte, error) {
 	switch function {
+	case "getUserEMRNum":
+		if len(args) != 1 {
+			return nil,
+			errors.New("Incorrect number of arguments. Expecting user's name to query")
+		}
+		userName := args[0]
+		ownEMRNum, err := t.getUserEMRNum(stub, userName)
+		if err != nil {
+			return nil, err
+		}
+        response, err := json.Marshal(ownEMRNum)
+		return response, err
+
+	case "getUserEMRList":
+		if len(args) != 1 {
+			return nil,
+			errors.New("Incorrect number of arguments. Expecting user's name to query")
+		}
+		userName := args[0]
+		ownEMR, err := t.getUserEMRList(stub, userName)
+		if err != nil {
+			return nil, err
+		}
+        response, err := json.Marshal(ownEMR)
+		return response, err
+
 	case "getAllEMR":
 		if len(args) != 2 {
 			return nil,
@@ -473,6 +531,7 @@ func (t *THcareChaincode) Query(stub shim.ChaincodeStubInterface, function strin
 		}
                 response, err := json.Marshal(emrList)
 		return response, err
+		
 	case "getSingleEMR":
 		if len(args) != 2 {
 			return nil,
