@@ -39,12 +39,12 @@ type User struct {
 	Name	string
 	Type	string  // patient, hospital, doctor, goverment and thirdparty 用户、医院、医生、政府和第三方检测机构
 	EMRNum  int
-	ownEMR  []int	// emr list for this person
+	ownEMR  map[int]int	// emr list for this person
 }
 
 // for test
 
-func (t *THcareChaincode) getUserEMRNum(stub shin.ChaincodeStubInterface, name string) (int, error) {
+func (t *THcareChaincode) getUserEMRNum(stub shim.ChaincodeStubInterface, name string) (int, error) {
 
 	user, err := t.getUserByName (stub, name)
 	if err != nil {
@@ -54,16 +54,14 @@ func (t *THcareChaincode) getUserEMRNum(stub shin.ChaincodeStubInterface, name s
 	return i,nil
 }
 
-func (t *THcareChaincode) getUserEMRList(stub shin.ChaincodeStubInterface, name string) ([]int, error) {
+func (t *THcareChaincode) getUserEMRList(stub shim.ChaincodeStubInterface, name string) (map[int]int, error) {
 
 	user, err := t.getUserByName (stub, name)
 	if err != nil {
-		return []int{}, errors.New("Entity not found")
+		return make(map[int][int]), errors.New("Entity not found")
 	}
 
-	ownEMRList := user.ownEMR
-
-	return ownEMRList, nil
+	return user.ownEMR, nil
 
 }
 
@@ -103,7 +101,9 @@ func (t *THcareChaincode) getUserByName(stub shim.ChaincodeStubInterface, name s
 
 func (t *THcareChaincode) addUser(stub shim.ChaincodeStubInterface, type0 string, name0 string) error {
 
-	user := User{Name: name0, Type: type0, EMRNum: 0}
+	own := make(map[int][int])
+
+	user := User{Name: name0, Type: type0, EMRNum: 0, ownEMR: own}
 
 	err := t.setUserByName(stub, user)
 	if err != nil {
@@ -173,33 +173,33 @@ func (t *THcareChaincode) searchEMRByID(stub shim.ChaincodeStubInterface, serID 
 }
 
 // 外部搜索函数，获取某人的所有EMR
-func (t *THcareChaincode) searchAllEMR(stub shim.ChaincodeStubInterface, ownName string, queryName string) ([]EMR, error) {
-	var emrList []EMR
+func (t *THcareChaincode) searchAllEMR(stub shim.ChaincodeStubInterface, ownName string, queryName string) (map[int]EMR, error) {
+	emrList := make[int]EMR
 
 	var user User
 	user, err := t.getUserByName(stub, ownName)
         if err != nil {
-                return nil, err
+                return make(map[int]EMR), err
         }
 	if user.EMRNum<0 {
-		return []EMR{}, errors.New("This patient have no EMR")
+		return make(map[int]EMR), errors.New("This patient have no EMR")
 	}
 	
-	for _,id := range user.ownEMR{	//遍历当前用户的每一条EMR
+	for id,_ := range user.ownEMR{	//遍历当前用户的每一条EMR
 		temEMR, err := t.getEMRByID(stub, id)
                 if err != nil {
-                        return nil, err
+                        return make(map[int]EMR), err
                 }
 		_, ok := temEMR.AuthorityList[queryName]
 		if ok{
 		// 当前EMR记录有授权
-			emrList = append(emrList, temEMR)
+			emrList[id]  = temEMR
 		}
 	}
 
 	switch len(emrList){
 	case 0:
-		return []EMR{}, errors.New("No authorized EMR for this patient")
+		return make(map[int]EMR), errors.New("No authorized EMR for this patient")
 	default:
 		return emrList, nil
 	}
@@ -219,7 +219,7 @@ func (t *THcareChaincode) addEMR(stub shim.ChaincodeStubInterface, owner string,
 
 	emr.AuthorityList = make(map[string]int)
 
-        emr.AuthorityList[adder] = 1
+    emr.AuthorityList[adder] = 1
 	emr.AuthorityList[owner] = 1
 
 	err = t.setEMRByID(stub, emr)
@@ -231,7 +231,9 @@ func (t *THcareChaincode) addEMR(stub shim.ChaincodeStubInterface, owner string,
 
 	var user User
 	user, err = t.getUserByName(stub, owner)
-	user.ownEMR = append(user.ownEMR, int(curID))
+
+	user.ownEMR[int(curID)] = 1
+
 	user.EMRNum = user.EMRNum + 1
 
 	err = t.setUserByName(stub, user)
@@ -279,7 +281,7 @@ func (t *THcareChaincode) addAllReadAuthority(stub shim.ChaincodeStubInterface, 
 
 	var emr EMR
 
-	for _,id := range user.ownEMR{
+	for id,_ := range user.ownEMR{
 
 		emr, err = t.getEMRByID(stub, id);
 
@@ -328,7 +330,7 @@ func (t *THcareChaincode) delAllReadAuthority(stub shim.ChaincodeStubInterface, 
 
 	var emr EMR
 
-	for _,id := range user.ownEMR{
+	for id,_ := range user.ownEMR{
 
 		emr, err = t.getEMRByID(stub, id);
 		
