@@ -39,7 +39,7 @@ type User struct {
 	Name	string
 	Type	string  // patient, hospital, doctor, goverment and thirdparty 用户、医院、医生、政府和第三方检测机构
 	EMRNum  int
-	ownEMR  map[string]int	// emr list for this person
+//	ownEMR  map[string]int	// emr list for this person
 }
 
 // for test
@@ -54,16 +54,16 @@ func (t *THcareChaincode) getUserEMRNum(stub shim.ChaincodeStubInterface, name s
 	return i,nil
 }
 
-func (t *THcareChaincode) getUserEMRList(stub shim.ChaincodeStubInterface, name string) (map[string]int, error) {
+//func (t *THcareChaincode) getUserEMRList(stub shim.ChaincodeStubInterface, name string) (map[string]int, error) {
+//
+//	user, err := t.getUserByName (stub, name)
+//	if err != nil {
+//		return make(map[string]int), errors.New("Entity not found")
+//	}
+//
+//	return user.ownEMR, nil
 
-	user, err := t.getUserByName (stub, name)
-	if err != nil {
-		return make(map[string]int), errors.New("Entity not found")
-	}
-
-	return user.ownEMR, nil
-
-}
+//}
 
 
 func (t *THcareChaincode) setUserByName(stub shim.ChaincodeStubInterface, user User) error {
@@ -103,8 +103,8 @@ func (t *THcareChaincode) addUser(stub shim.ChaincodeStubInterface, type0 string
 
 	user := User{Name: name0, Type: type0, EMRNum: 0};
 
-        user.ownEMR = make(map[string]int)
-        user.ownEMR["init"] = -1
+   //     user.ownEMR = make(map[string]int)
+   //     user.ownEMR["init"] = -1
 
 	err := t.setUserByName(stub, user)
 	if err != nil {
@@ -186,15 +186,21 @@ func (t *THcareChaincode) searchAllEMR(stub shim.ChaincodeStubInterface, ownName
 		return make(map[int]EMR), errors.New("This patient have no EMR")
 	}
 	
-	for _,id := range user.ownEMR{	//遍历当前用户的每一条EMR
+	//遍历EMR
+	id := 1
+
+	for {
 		temEMR, err := t.getEMRByID(stub, id)
-                if err != nil {
-                        return make(map[int]EMR), err
-                }
-		_, ok := temEMR.AuthorityList[queryName]
-		if ok{
-		// 当前EMR记录有授权
-			emrList[id]  = temEMR
+		if err != nil{
+			break;
+		}
+
+		if temEMR.Owner == ownName {
+			_, ok := temEMR.AuthorityList[queryName]
+			if ok{
+			// 当前EMR记录有授权
+			emrList[id] = temEMR
+			}
 		}
 	}
 
@@ -233,7 +239,7 @@ func (t *THcareChaincode) addEMR(stub shim.ChaincodeStubInterface, owner string,
 	var user User
 	user, err = t.getUserByName(stub, owner)
 
-	user.ownEMR[string(curID)] = int(curID)
+//	user.ownEMR[string(curID)] = int(curID)
 
 	user.EMRNum = user.EMRNum + 1
 
@@ -280,25 +286,40 @@ func (t *THcareChaincode) addAllReadAuthority(stub shim.ChaincodeStubInterface, 
 		return err
 	}
 
-	var emr EMR
 
-	for _,id := range user.ownEMR{
+	//遍历EMR
+	id := 1
 
-		emr, err = t.getEMRByID(stub, id);
-
-		if emr.Owner == queryName {
-			_, ok := emr.AuthorityList[toAuthorName]
-			if ok {
-			}else{
-				emr.AuthorityList[toAuthorName] = 1
-			}
+	for {
+		temEMR, err := t.getEMRByID(stub, id)
+		if err != nil{
+			break;
 		}
 
-		err := t.setEMRByID(stub, emr)
-		if err != nil {
-			return err
+		if temEMR.Owner == queryName {
+			temEMR.AuthorityList[queryName] = 1 
 		}
 	}
+
+	// var emr EMR
+
+	// for _,id := range user.ownEMR{
+
+	// 	emr, err = t.getEMRByID(stub, id);
+
+	// 	if emr.Owner == queryName {
+	// 		_, ok := emr.AuthorityList[toAuthorName]
+	// 		if ok {
+	// 		}else{
+	// 			emr.AuthorityList[toAuthorName] = 1
+	// 		}
+	// 	}
+
+	// 	err := t.setEMRByID(stub, emr)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// }
 
 	
 	return nil
@@ -331,21 +352,23 @@ func (t *THcareChaincode) delAllReadAuthority(stub shim.ChaincodeStubInterface, 
 
 	var emr EMR
 
-	for _,id := range user.ownEMR{
+	//遍历EMR
+	id := 1
 
-		emr, err = t.getEMRByID(stub, id);
-		
-		_, ok := emr.AuthorityList[toAuthorName]
-		if ok{
-			delete(emr.AuthorityList, toAuthorName)
+	for {
+		temEMR, err := t.getEMRByID(stub, id)
+		if err != nil{
+			break;
 		}
 
-		err = t.setEMRByID(stub, emr)
-		if err != nil {
-			return err
+		if temEMR.Owner == queryName {
+			_, ok := emr.AuthorityList[toAuthorName]
+			if ok{
+				delete(emr.AuthorityList, toAuthorName)
+			}
 		}
-
 	}
+
 	
 	return nil
 }
