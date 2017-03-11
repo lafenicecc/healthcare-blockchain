@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-
+        "strings"
 	"github.com/hyperledger/fabric/core/chaincode/shim"
 )
 
@@ -207,7 +207,7 @@ func (t *THcareChaincode) searchAllEMR(stub shim.ChaincodeStubInterface, ownName
                         return EMRList{}, err
                 }
 
-		if temEMR.Owner == ownName {
+		if strings.EqualFold(temEMR.Owner, ownName) {
 			_, ok := temEMR.AuthorityList[queryName]
 			if ok{
 			// 当前EMR记录有授权
@@ -312,31 +312,16 @@ func (t *THcareChaincode) addAllReadAuthority(stub shim.ChaincodeStubInterface, 
                         return err
                 }
 
-		if temEMR.Owner == queryName {
+		if strings.EqualFold(temEMR.Owner, queryName) {
 			temEMR.AuthorityList[toAuthorName] = 1 
 		}
                 id++
+
+                err = t.setEMRByID(stub, temEMR)
+                if err != nil {
+                        return err
+                }
 	}
-
-	// var emr EMR
-
-	// for _,id := range user.ownEMR{
-
-	// 	emr, err = t.getEMRByID(stub, id);
-
-	// 	if emr.Owner == queryName {
-	// 		_, ok := emr.AuthorityList[toAuthorName]
-	// 		if ok {
-	// 		}else{
-	// 			emr.AuthorityList[toAuthorName] = 1
-	// 		}
-	// 	}
-
-	// 	err := t.setEMRByID(stub, emr)
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// }
 
 	
 	return nil
@@ -382,13 +367,18 @@ func (t *THcareChaincode) delAllReadAuthority(stub shim.ChaincodeStubInterface, 
                 }
 
 
-		if temEMR.Owner == queryName {
+		if strings.EqualFold(temEMR.Owner, queryName) {
 			_, ok := temEMR.AuthorityList[toAuthorName]
 			if ok{
 				delete(temEMR.AuthorityList, toAuthorName)
 			}
 		}
                 id++
+                
+                err = t.setEMRByID(stub, temEMR)
+                if err != nil {
+                        return err
+                }
 	}
 
 	
