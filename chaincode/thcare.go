@@ -333,7 +333,7 @@ func (t *THcareChaincode) delReadAuthority(stub shim.ChaincodeStubInterface, emr
 	var emr EMR
 	emr, err := t.getEMRByID(stub, emrID);
 
-	if emr.Owner == queryName {
+	if strings.EqualFold(emr.Owner, queryName){
 		_, ok := emr.AuthorityList[toAuthorName]
 		if ok{
 			delete(emr.AuthorityList, toAuthorName)
